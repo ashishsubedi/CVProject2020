@@ -56,12 +56,18 @@ def calcBackProj(roi):
     disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     backProj = cv2.filter2D(backProj, -1, disc)
     ret, thresh = cv2.threshold(backProj, 30, 200, 0)
+    thresh = cv2.GaussianBlur(thresh, (7, 7), 0)
     thresh = cv2.dilate(thresh, None, iterations=2)
-    thresh = cv2.erode(thresh, None, iterations=1)
+    thresh = cv2.erode(thresh, None, iterations=2)
     return thresh, roi
 
 
 def getTip(roi, mask):
+    mask = cv2.GaussianBlur(mask, (5, 5), 0.2)
+    # thresh = cv2.dilate(thresh, None, iterations=3)
+
+    # thresh = cv2.erode(thresh, None, iterations=2)
+
     cnts, _ = cv2.findContours(
         mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     if(len(cnts) > 0):
@@ -79,8 +85,9 @@ def getTip(roi, mask):
             if(dist > maxDistance):
                 maxDistance = dist
                 fingerPoint = tuple(point[0])
-        # cv2.drawContours(roi, [hull], -1, (0, 255, 0), 2)
+        cv2.drawContours(roi, [hull], -1, (0, 255, 0), 2)
         cv2.circle(roi, fingerPoint, 5, (0, 0, 255), -1)
+        cv2.circle(roi, center, 5, (0, 255, 255), -1)
 
     return roi, fingerPoint
 
