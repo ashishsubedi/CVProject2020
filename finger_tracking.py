@@ -3,11 +3,14 @@ import numpy as np
 import time
 from imutils import contours
 X = 2
-Y = 3
+Y = 2
 cap = cv2.VideoCapture(0)
 
 sampling = False
 sampled = False
+tracking = False
+tracker = cv2.TrackerCSRT_create()
+handHist = None
 
 
 def draw_rect(frame, x=2, y=2, size=15):
@@ -58,7 +61,7 @@ def create_mask(frame, cords, x=2, y=2, size=15, offset=5):
     s_low, s_max = int(np.min(s)), int(s.max())
     v_low, v_max = int(np.min(v)), int(v.max())
 
-    return np.array([h_low-offset, s_low-offset, v_low-offset]), np.array([h_max, s_max, v_max])
+    return np.array([h_low, s_low, v_low]), np.array([h_max, s_max, v_max])
 
 
 def start_sampling(frame, x=2, y=2, size=15, offset=5):
@@ -66,10 +69,17 @@ def start_sampling(frame, x=2, y=2, size=15, offset=5):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     low, high = create_mask(hsv, cords, x, y, size=size, offset=offset)
     mask = cv2.inRange(hsv, low, high)
+    mask = cv2.dilate(mask, None, iterations=2)
+    mask = cv2.erode(mask, None, iterations=2)
+    op = cv2.bitwise_and(frame, frame, mask=mask)
+
+    global handHist
+    handHist = cv2.calcHist([op], [0, 1], None, [180, 256], [0, 180, 0, 256])
+    handHist = cv2.normalize(handHist, hand_hist, 0, 255, cv2.NORM_MINMAX)
     return mask
 
 
-def get_convex_hull(image, frame):
+def get_convex_hull(frame):
     img = frame.copy()
     img = cv2.GaussianBlur(img, (5, 5), 0.2)
     img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, (9, 9))
@@ -83,43 +93,67 @@ def get_convex_hull(image, frame):
             M = cv2.moments(c)
             center = (int(M['m10']/M['m00']), int(M['m01'] / M['m00']))
             hull = cv2.convexHull(c)
-            # defects = cv2.convexityDefects(cnts, hull)
-            cv2.circle(image, center, 3, (255, 255, 0), -1)
+
             for point in c:
                 dist = np.linalg.norm(center-point[0])
                 if(dist > maxDistance):
                     maxDistance = dist
-                    fingePoint = tuple(point[0])
+                    fingerPoint = tuple(point[0])
 
-    return hull, maxDistance, center, fingePoint
+    return hull, maxDistance, center, fingerPoint
+
+
+def startTracking(frame, mask, rect):
+    pass
+    # global tracking, tracker
+    # if not tracking:
+    #     tracking = True
+    #     tracker.init(frame, rect)
+    # else:
+    #     (success, box) = tracker.update(frame)
+
+    #     if success:
+    #         (x, y, w, h) = [int(v) for v in box]
+    #         cv2.rectangle(frame, (x, y), (x + w, y + h),
+    #                       (0, 255, 0), 2)
+    #         return frame, (x, y, w, h)
+
+    # return frame,  -1
+
+    # Find same colored mask as sampled colors
 
 
 op = None
 while True:
     start = time.time()
-    pressed_key = cv2.waitKey(1)
-    if(pressed_key == ord('s')):
-        sampling = True
-        sampled = False
-    if(pressed_key == ord('d')):
-        sampling = False
-        sampled = True
 
     ret, frame = cap.read()
     if not ret:
         break
+    frame = cv2.flip(frame, 1)
     H, W = frame.shape[:2]
-
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     if(sampling):
         mask = start_sampling(frame, X, Y)
+        tracking = False
         op = cv2.bitwise_and(frame, frame, mask=mask)
         cv2.putText(frame, "Sampling Started, put your palm to cover all rectangles.Press d when done",
                     (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (13, 13))
-        hull, distance, center, fingerPoint = get_convex_hull(
-            frame, mask)
+        hull, distance, center, fingerPoint = get_convex_hull(mask)
+        fingerRect = (fingerPoint[0]-5, fingerPoint[1]-5, 10, 10)
         cv2.drawContours(frame, [hull], -1, (0, 255, 0), 2)
         cv2.line(frame, center, fingerPoint, (255, 0, 0), 3)
+    elif(sampled):
+        cv2.circle(frame, fingerPoint, 5, (0, 0, 255), -1)
+        mask = start_sampling(frame, X, Y)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (13, 13))
+        hull, distance, center, fingerPoint = get_convex_hull(mask)
+        frame, value = startTracking(frame, mask, hull, center, fingerPoint)
+        if(value != -1):
+            (x, y, w, h) = value
+            fingerPoint = (x, y)
+            fingerRect = value
 
     elif(not sampling and not sampled):
         cv2.putText(frame, "Press s to start sampling",
@@ -135,7 +169,15 @@ while True:
         cv2.imshow('op', op)
 
     cv2.imshow('frame', frame)
-    if cv2.waitKey(1) == 27:
+    cv2.imshow('hsv', hsv)
+    pressed_key = cv2.waitKey(1) & 0xFF
+    if(pressed_key == ord('s')):
+        sampling = True
+        sampled = False
+    elif(pressed_key == ord('d')):
+        sampling = False
+        sampled = True
+    elif pressed_key == 27:
         break
 
 cv2.destroyAllWindows()
