@@ -1,2 +1,1 @@
-# CVProject2020
-import cv2 #Imports opencv library
+Created automatically using create-github 
