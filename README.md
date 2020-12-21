@@ -1,4 +1,6 @@
-Created automatically using create-github 
+
+# Air Write
+Computer vision project that enables you to write in air.
 
 [! Model](posefs1.perception.cs.cmu.edu/OpenPose/models/hand/pose_iter_102000.caffemodel)
 
