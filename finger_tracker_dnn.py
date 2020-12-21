@@ -22,7 +22,6 @@ def sample(frame):
     net = cv2.dnn.readNetFromCaffe(protoFile, weightsFile)
     inpBlob = cv2.dnn.blobFromImage(frame, 1.0 / 255, (WIDTH, HEIGHT),
                                     (0, 0, 0), swapRB=False, crop=False)
-
     net.setInput(inpBlob)
 
     output = net.forward()
